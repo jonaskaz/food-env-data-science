@@ -9,6 +9,110 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r, echo = False}
+library(tidyverse)
+library(readxl)
+```
+
+
+
+```{r}
+path <- "data/FoodEnvironmentAtlas.xls"
+df_all <- 
+  path %>%
+  excel_sheets() %>%
+  set_names() %>%
+  map(read_excel, path = path)
+
+# df_all
+
+df_access <- df_all[[5]]
+df_stores <- df_all[[6]]
+df_restaurants <- df_all[[7]]
+df_assistance <- df_all[[8]]
+df_insecurity <- df_all[[9]]
+df_local <- df_all[[11]]
+df_health <- df_all[[12]]
+df_income <- df_all[[13]]
+```
+
+```{r}
+df_obese_state <- 
+  df_health %>% 
+  group_by(State) %>% 
+  summarize(obese = mean(PCT_OBESE_ADULTS17))
+df_ffr_state <- 
+  df_restaurants %>% 
+  group_by(State) %>% 
+  summarize(ffr = mean(FFRPTH16))
+```
+
+
+```{r}
+df_access %>%
+  select(c(
+    "FIPS", 
+    "LACCESS_POP15", 
+    "LACCESS_LOWI15", 
+    "LACCESS_HHNV15"
+    )) %>% 
+  # filter(County == "Jones")
+  arrange(LACCESS_POP15)
+  # filter(LACCESS_POP15 != 0) %>% 
+  # mutate("pct_li" = LACCESS_LOWI15/LACCESS_POP15) %>%
+  # mutate("pct_nv" = LACCESS_HHNV15/LACCESS_POP15) %>%
+  # arrange(desc(pct_nv))
+  # summary()
+    # filter(pct_nv != 0) %>% 
+  # # mutate("pct_nv" = pct_nv[pct_nv == 0] <- NA)
+  # summarize(
+  #   pct_li = mean(pct_li, na.rm = T),
+  #   pct_nv = mean(pct_nv, na.rm = T)
+  # )
+```
+
+```{r}
+df_rest_acc <- 
+  df_restaurants %>% 
+  full_join(df_access, by = "FIPS") %>% 
+  select(c('FIPS', 'PCT_LACCESS_POP15', 'FFRPTH16'))
+
+df_rest_acc %>% 
+  ggplot(aes(PCT_LACCESS_POP15, FFRPTH16)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+```{r}
+df_rest_acc %>% 
+  arrange(desc(FFRPTH16))
+```
+
+```{r}
+df_inc_acc <- 
+  df_income %>% 
+  full_join(df_access, by = "FIPS") %>% 
+  select(c('FIPS', 'PCT_LACCESS_POP15', 'MEDHHINC15', 'PC_FFRSALES12'))
+
+df_inc_acc %>% 
+  ggplot(aes(PCT_LACCESS_POP15, MEDHHINC15)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+```{r}
+df_restaurants
+```
+
+
+```{r}
+df_inc_acc %>% 
+  ggplot(aes(PCT_LACCESS_POP15, PC_FFRSALES12)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+
+
+
 ## R Markdown
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
