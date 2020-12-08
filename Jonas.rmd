@@ -7,6 +7,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library("readxl")
 ```
 
 ## R Markdown
@@ -15,16 +17,68 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+```{r import data}
+path <- "data/DataDownload.xls"
+df_all <- path %>%
+  excel_sheets() %>%
+  set_names() %>%
+  map(read_excel, path = path)
 ```
 
 ## Including Plots
 
 You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r EDA}
+glimpse(df_all[9])
+df_access <- df_all[[5]]
+df_stores <- df_all[[6]]
+df_restaurants <- df_all[[7]]
+df_assistance <- df_all[[8]]
+df_insecurity <- df_all[[9]]
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+PCT_SNAP16
+"SNAP participants (% pop), 2016*"
+
+PCT_SNAP12
+"SNAP participants (% pop), 2012*"
+
+VLFOODSEC_13_15
+"Household very low food security (%, three-year average), 2013-15*"
+
+```{r}
+df_assist_insec <-
+  inner_join(
+    df_assistance,
+    df_insecurity,
+    by = c("FIPS", "State", "County")
+  )
+
+
+```
+
+
+```{r}
+glimpse(df_assist_insec)
+```
+
+```{r}
+df_assist_insec %>%
+  ggplot(aes(PCT_SNAP12, VLFOODSEC_13_15)) +
+  geom_point() +
+  geom_smooth(method="lm")
+```
+
+```{r}
+df_assist_insec %>%
+  ggplot(aes(PCT_SNAP12, VLFOODSEC_13_15)) +
+  geom_point(aes(color = State))
+
+```
+
+
+
