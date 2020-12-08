@@ -41,11 +41,21 @@ df_obese_state <-
   df_health %>% 
   group_by(State) %>% 
   summarize(obese = mean(PCT_OBESE_ADULTS17))
+
 df_ffr_state <- 
   df_restaurants %>% 
   group_by(State) %>% 
   summarize(ffr = mean(FFRPTH16))
+
+full_join(
+  df_obese_state,
+  df_ffr_state,
+  by = 'State'
+) %>% 
+  ggplot(aes(obese, ffr)) +
+  geom_point()
 ```
+
 
 
 ```{r}
