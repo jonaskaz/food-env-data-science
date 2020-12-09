@@ -9,6 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library("readxl")
+library(glmnet)
+library(dplyr)
+library(tidyr)
 ```
 
 ## R Markdown
@@ -18,7 +21,7 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r import data}
-path <- "data/DataDownload.xls"
+path <- "data/FoodEnvironmentAtlas.xls"
 df_all <- path %>%
   excel_sheets() %>%
   set_names() %>%
@@ -36,10 +39,18 @@ df_stores <- df_all[[6]]
 df_restaurants <- df_all[[7]]
 df_assistance <- df_all[[8]]
 df_insecurity <- df_all[[9]]
+df_taxes <- df_all[[10]]
+df_local <- df_all[[11]]
+df_health <- df_all[[12]]
+df_socioeconomic <- df_all[[13]]
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
+PCT_DIABETES_ADULTS08
+"Diabetes rate 2008"
+
+PCT_DIABETES_ADULTS13
+"Diabetes rate 2013"
 
 PCT_SNAP16
 "SNAP participants (% pop), 2016*"
@@ -62,9 +73,6 @@ df_assist_insec <-
 ```
 
 
-```{r}
-glimpse(df_assist_insec)
-```
 
 ```{r}
 df_assist_insec %>%
@@ -79,6 +87,79 @@ df_assist_insec %>%
   geom_point(aes(color = State))
 
 ```
+
+```{r}
+df_health_socio <-
+  inner_join(
+    df_health,
+    df_socioeconomic,
+    by = c("FIPS", "State", "County")
+  )
+```
+
+
+```{r}
+
+df_health_1  <- df_health_socio %>%
+  na.omit() %>%
+  select(-c('FIPS', "State", "County"))
+
+x_vars <- model.matrix(PCT_DIABETES_ADULTS08~. , df_health_1)[,-1]
+y_var <- df_health_1$PCT_DIABETES_ADULTS08
+lambda_seq <- 10^seq(2, -2, by = -.1)
+grid = 10^seq(10, -2, length = 100)
+```
+
+
+
+```{r}
+set.seed(86)
+train = sample(1:nrow(x_vars), nrow(x_vars)/2)
+x_test = (-train)
+y_test = y_var[x_test]
+
+```
+
+```{r}
+lasso_mod = glmnet(x_vars[train,], 
+                   y_var[train], 
+                   alpha = 1, 
+                   lambda = grid) # Fit lasso model on training data
+
+plot(lasso_mod)    # Draw plot of coefficients
+```
+
+
+
+```{r}
+set.seed(1)
+cv.out = cv.glmnet(x_vars[train,], y_var[train],  alpha = 1) # Fit lasso model on training data
+plot(cv.out) # Draw plot of training MSE as a function of lambda
+bestlam = cv.out$lambda.min # Select lamda that minimizes training MSE
+
+```
+
+```{r}
+lasso_best <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = bestlam)
+pred <- predict(lasso_best, s = bestlam, newx = x_vars[x_test,])
+```
+
+```{r}
+final <- cbind(y_test, pred)
+# Checking the first six obs
+head(final)
+```
+
+
+
+
+```{r}
+
+
+coef(lasso_best)
+
+```
+
 
 
 
