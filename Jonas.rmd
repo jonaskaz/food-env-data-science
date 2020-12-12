@@ -127,6 +127,7 @@ lasso_mod = glmnet(x_vars[train,],
                    lambda = grid) # Fit lasso model on training data
 
 plot(lasso_mod)    # Draw plot of coefficients
+lasso_mod
 ```
 
 

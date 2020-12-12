@@ -1,0 +1,161 @@
+---
+title: "lasso_regression"
+author: "Jonas"
+date: "12/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library("readxl")
+library(glmnet)
+library(dplyr)
+library(tidyr)
+```
+
+## R Markdown
+
+
+
+```{r}
+path <- "data/FoodEnvironmentAtlas.xls"
+df_all <- path %>%
+  excel_sheets() %>%
+  set_names() %>%
+  map(read_excel, path = path)
+```
+
+```{r}
+df_access <- df_all[[5]]
+df_stores <- df_all[[6]]
+df_restaurants <- df_all[[7]]
+df_assistance <- df_all[[8]]
+df_insecurity <- df_all[[9]]
+df_taxes <- df_all[[10]]
+df_local <- df_all[[11]]
+df_health <- df_all[[12]]
+df_socioeconomic <- df_all[[13]]
+```
+
+
+
+```{r}
+df_full_dirty <-
+  inner_join(
+    df_health,
+    df_socioeconomic,
+    by = c("FIPS", "State", "County")
+  ) %>%
+  inner_join(
+    df_access,
+    by = c("FIPS", "State", "County")
+  ) %>%
+  inner_join(
+    df_stores,
+    by = c("FIPS", "State", "County")
+  ) %>%
+  inner_join(
+    df_restaurants,
+    by = c("FIPS", "State", "County")
+  ) %>%
+  inner_join(
+    df_assistance,
+    by = c("FIPS", "State", "County")
+  ) %>%
+  inner_join(
+    df_insecurity,
+    by = c("FIPS", "State", "County")
+  ) %>%
+  inner_join(
+    df_taxes,
+    by = c("FIPS", "State", "County")
+  ) 
+
+
+
+df_full  <- df_full_dirty %>%
+  select(-c('FIPS', "State", "County", "PCT_DIABETES_ADULTS08"))
+df_full
+```
+
+
+
+```{r}
+# create a matrix of all the predictors in df_health_socio
+# This also makes everything numeric and turns qualitative data into dummy vars
+x_vars <- model.matrix(PCT_DIABETES_ADULTS13~. , df_full)[,-1]
+y_var <- df_health_socio$PCT_DIABETES_ADULTS13
+# setup a sequence of lambda values to go through.
+lambda_seq <- 10^seq(2, -2, by = -.1)
+```
+
+
+```{r}
+# split the data into test and train data
+set.seed(4)
+
+train = sample(1:nrow(x_vars), nrow(x_vars)/2)
+# x_test is indexes
+x_test = (-train)
+# y_test is values
+y_test = y_var[x_test]
+
+
+```
+
+
+```{r}
+training_data_x <- x_vars[train,]
+training_data_y <- y_var[train]
+
+```
+
+
+
+```{r}
+
+lasso_mod = glmnet(training_data_x, 
+                   training_data_y, 
+                   alpha = 1, 
+                   lambda = lambda_seq) # Fit lasso model on training data
+
+# df the number of nonzero coefficients for each value of lambda
+# dev % is The fraction of (null) deviance explained (for "elnet", this is the R-square). The deviance calculations incorporate weights if present in the model. The deviance is defined to be 2*(loglike_sat - loglike), where loglike_sat is the log-likelihood for the saturated model (a model with a free parameter per observation). Hence dev.ratio=1-dev/nulldev.
+
+```
+
+
+```{r}
+
+cv_output = cv.glmnet(x_vars[train,],
+                   y_var[train],
+                   alpha = 1,
+                   lambda = lambda_seq,) # Fit lasso model on training data
+
+plot(cv_output) # Draw plot of training MSE as a function of lambda
+
+best_lam <- cv_output$lambda.min
+best_lam
+```
+
+
+newx = x_vars[x_test,]
+
+```{r}
+
+lasso_best <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = best_lam)
+
+pred <- predict(lasso_best, s = best_lam,  newx = x_vars[x_test,])
+
+```
+
+
+
+```{r}
+final <- cbind(y_var[x_test], pred)
+# Checking the first six obs
+final
+```
+
+
+
