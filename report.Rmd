@@ -54,6 +54,32 @@ df_all <-
   reduce(inner_join, by = "FIPS")
 ```
 
+The most obvious thing to notice from this EDA is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. Because we are going to be investigating diabetes rates, we looked at some summary statistics for the factor `PCT_DIABETES_ADULTS08`. We can see that the mean diabetes rate is about 9.9%, which is close but slightly under the CDC's estimate of 10.2% for the national diabetes rate [6]. A histogram allows us to visualize the distribution that diabetes rates takes across all counties. We can see that the distribution looks roughly normal, but the peak is slightly shifted to the left of where we would otherwise expect the center. Interestingly, the bin at 17% appears to be *slightly* higher than the surrounding bins. What's even more interesting is that when we isolate the counties with the 10 highest diabetes rates, we find that they are all in Alabama or Georgia, with 8/10 being in Alabama. 
+
+```{r EDA}
+df_all %>% 
+  dim()
+
+df_all %>%
+  select(PCT_DIABETES_ADULTS08) %>% 
+  summary()
+
+df_all %>% 
+  select(c("County.x", "State.x", "PCT_DIABETES_ADULTS08")) %>% 
+  arrange(desc(PCT_DIABETES_ADULTS08)) %>% 
+  head(10)
+
+df_all %>%
+  select(PCT_DIABETES_ADULTS08) %>% 
+  ggplot() +
+  geom_histogram(aes(x = PCT_DIABETES_ADULTS08), binwidth = .5, boundary = 10) +
+  xlab("Percent of Adults Diagnosed with Diabetes")
+```
+```{r}
+df_all
+```
+
+
 ## Methodology - Shawn
 *some stuff about Lasso regression*
 
@@ -81,7 +107,7 @@ df_all <-
 [3] https://rstatisticsblog.com/data-science-in-action/machine-learning/lasso-regression/  
 [4] https://www.steveklosterman.com/over-under/  
 [5] http://www.science.smith.edu/~jcrouser/SDS293/labs/lab10-r.html  
-
+[6] https://www.cdc.gov/diabetes/pdfs/data/statistics/national-diabetes-statistics-report.pdf
 
 
 
