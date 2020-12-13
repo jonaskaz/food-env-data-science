@@ -50,11 +50,11 @@ fips_list <- full_list[c(3, 5:length(full_list))]
 
 # Create a single dataframe with all parameters for all counties
 df_all <- 
-  part_list %>% 
+  fips_list %>% 
   reduce(inner_join, by = "FIPS")
 ```
 
-The most obvious thing to notice from this EDA is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. Because we are going to be investigating diabetes rates, we looked at some summary statistics for the factor `PCT_DIABETES_ADULTS08`. We can see that the mean diabetes rate is about 9.9%, which is close but slightly under the CDC's estimate of 10.2% for the national diabetes rate [6]. A histogram allows us to visualize the distribution that diabetes rates takes across all counties. We can see that the distribution looks roughly normal, but the peak is slightly shifted to the left of where we would otherwise expect the center. Interestingly, the bin at 17% appears to be *slightly* higher than the surrounding bins. What's even more interesting is that when we isolate the counties with the 10 highest diabetes rates, we find that they are all in Alabama or Georgia, with 8/10 being in Alabama. 
+The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS08` which contains the percentage rates of diabetes diagnosed in adults in each county. We can see that the mean diabetes rate is about 9.9%, which is slightly less than the CDC's estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal, but the peak is slightly shifted to the left. Interestingly, the bin at 17% appears to be *slightly* higher than the surrounding bins. Furthermore, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or Georgia. Eight out of ten are counties in Alabama, while the other two are in Georgia. 
 
 ```{r EDA}
 df_all %>% 
@@ -75,9 +75,7 @@ df_all %>%
   geom_histogram(aes(x = PCT_DIABETES_ADULTS08), binwidth = .5, boundary = 10) +
   xlab("Percent of Adults Diagnosed with Diabetes")
 ```
-```{r}
-df_all
-```
+
 
 
 ## Methodology - Shawn
