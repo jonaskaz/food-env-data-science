@@ -37,13 +37,21 @@ library("readxl")
 library(glmnet)
 ```
 
-
 ```{r load data}
 path <- "data/FoodEnvironmentAtlas.xls"
-df_all <- path %>%
+# Create a list of dataframes from every sheet in the .xls file
+full_list <- path %>%
   excel_sheets() %>%
   set_names() %>%
   map(read_excel, path = path)
+
+# Create a modified list of the dataframes to only include ones with `FIPS` columns
+fips_list <- full_list[c(3, 5:length(full_list))]
+
+# Create a single dataframe with all parameters for all counties
+df_all <- 
+  part_list %>% 
+  reduce(inner_join, by = "FIPS")
 ```
 
 ## Methodology - Shawn
@@ -68,11 +76,11 @@ df_all <- path %>%
 
 
 ## Sources
-[1] https://www.ers.usda.gov/data-products/food-environment-atlas/data-access-and-documentation-downloads/#Current%20Version
-[2] https://www.ers.usda.gov/webdocs/DataFiles/80526/2017%20Food%20Environment%20Atlas%20Documentation.pdf?v=1143.5
-[3] https://rstatisticsblog.com/data-science-in-action/machine-learning/lasso-regression/
-[4] https://www.steveklosterman.com/over-under/
-[5] http://www.science.smith.edu/~jcrouser/SDS293/labs/lab10-r.html
+[1] https://www.ers.usda.gov/data-products/food-environment-atlas/data-access-and-documentation-downloads/#Current%20Version  
+[2] https://www.ers.usda.gov/webdocs/DataFiles/80526/2017%20Food%20Environment%20Atlas%20Documentation.pdf?v=1143.5  
+[3] https://rstatisticsblog.com/data-science-in-action/machine-learning/lasso-regression/  
+[4] https://www.steveklosterman.com/over-under/  
+[5] http://www.science.smith.edu/~jcrouser/SDS293/labs/lab10-r.html  
 
 
 
