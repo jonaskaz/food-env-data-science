@@ -49,37 +49,78 @@ full_list <- path %>%
 fips_list <- full_list[c(3, 5:length(full_list))]
 
 # Create a single dataframe with all parameters for all counties
-df_all <- 
+df_full_fips <- 
   fips_list %>% 
   reduce(inner_join, by = "FIPS")
 ```
 
-The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS08` which contains the percentage rates of diabetes diagnosed in adults in each county. We can see that the mean diabetes rate is about 9.9%, which is slightly less than the CDC's estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal, but the peak is slightly shifted to the left. Interestingly, the bin at 17% appears to be *slightly* higher than the surrounding bins. Furthermore, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or Georgia. Eight out of ten are counties in Alabama, while the other two are in Georgia. 
+The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS13` which contains the percentage rates of diabetes diagnosed in adults in each county in 2013. We can see that the mean diabetes rate is about 11.24%, which is slightly higher than the CDC's 2020 estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal. Interestingly, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or South Carolina. Nine out of ten are counties in Alabama, while the other is in South Carolina. 
 
 ```{r EDA}
-df_all %>% 
+df_full_fips %>% 
   dim()
 
-df_all %>%
-  select(PCT_DIABETES_ADULTS08) %>% 
+df_full_fips %>%
+  select(PCT_DIABETES_ADULTS13) %>% 
   summary()
 
-df_all %>% 
-  select(c("County.x", "State.x", "PCT_DIABETES_ADULTS08")) %>% 
-  arrange(desc(PCT_DIABETES_ADULTS08)) %>% 
+df_full_fips %>% 
+  select(c("County.x", "State.x", "PCT_DIABETES_ADULTS13")) %>% 
+  arrange(desc(PCT_DIABETES_ADULTS13)) %>% 
   head(10)
 
-df_all %>%
-  select(PCT_DIABETES_ADULTS08) %>% 
+df_full_fips %>%
+  select(PCT_DIABETES_ADULTS13) %>% 
   ggplot() +
-  geom_histogram(aes(x = PCT_DIABETES_ADULTS08), binwidth = .5, boundary = 10) +
+  geom_histogram(aes(x = PCT_DIABETES_ADULTS13), binwidth = .5, boundary = 10) +
   xlab("Percent of Adults Diagnosed with Diabetes")
+```
+
+## Methodology
+In order to isolate the most important factors in a model to predict diabetes, we used a technique called lasso regression. Lasso regression is a form of **regularization**, which describes a family of techniques that help your model effectively balance **bias** and **variance**. In other words, a model should be optimized such that it is neither **underfit** (high bias) or **overfit** (high variance).
+
+
+Key to using lasso regression is splitting data into a training set and a testing set. The training set is used to inform the coefficients of a linear model, while the testing set is used to evaluate how well those coefficients work on separate data. 
+
+```{r split data into test and train}
+
+df_full <- 
+  df_full_fips %>% 
+  select(-c('FIPS', "State.x", "County.x", "PCT_DIABETES_ADULTS08"))
+
+# create a matrix of all the predictors in df_full
+# This also makes everything numeric and turns qualitative data into dummy vars
+x_vars <- model.matrix(PCT_DIABETES_ADULTS13~. , df_full)
+
+# Pull diabetes rates into a list
+y_var <- df_full$PCT_DIABETES_ADULTS13
+
+# Set sampling random seed
+set.seed(4)
+
+train = sample(1:nrow(x_vars), nrow(x_vars)/2)
+
+training_data_x <- x_vars[train,]
+training_data_y <- y_var[train]
+```
+
+
+One way to overfit a model is to give too much weight to factors in the training data which in reality don't have a large impact on the result. On the other hand, eliminating too many features of a model may be oversimplified and have high bias. Lasso regression introduces a parameter `lambda` which penalizes high correlation coefficients.
+
+```{r}
+# setup a sequence of lambda values to go through.
+lambda_seq <- 10^seq(2, -2, by = -.1)
+
+# x_test is indexes
+x_test = (-train)
+
+# y_test is values
+y_test = y_var[x_test]
+
 ```
 
 
 
-## Methodology - Shawn
-*some stuff about Lasso regression*
 
 ## What are the best predictors? - Shawn
 *what they are, why that might be the case*
@@ -106,7 +147,7 @@ df_all %>%
 [4] https://www.steveklosterman.com/over-under/  
 [5] http://www.science.smith.edu/~jcrouser/SDS293/labs/lab10-r.html  
 [6] https://www.cdc.gov/diabetes/pdfs/data/statistics/national-diabetes-statistics-report.pdf
-
-
+[7] https://cran.r-project.org/web/packages/glmnet/glmnet.pdf
+[8] https://www.pluralsight.com/guides/linear-lasso-and-ridge-regression-with-r
 
 
