@@ -29,7 +29,15 @@ library(broom)
 library(forcats)
 ```
 
-```{r}
+```{r load data}
+path <- "data/FoodEnvironmentAtlas.xls"
+# Create a list of dataframes from every sheet in the Food Environment Atlas
+full_list <- path %>%
+  excel_sheets() %>%
+  set_names() %>%
+  map(read_excel, path = path)
+
+# Get updated county level diabetes rates for 2018
 diabetes_path <- "data/diabetes2018.csv"
 df_diabetes18 <- 
   read_csv(
@@ -42,19 +50,8 @@ df_diabetes18 <-
     ) %>% 
   select(c(FIPS, diabetes18)) %>% 
   mutate(FIPS = ifelse(nchar(FIPS) == 4, paste("0", FIPS, sep = ""), FIPS))
-df_diabetes18
-```
 
-
-
-```{r load data}
-path <- "data/FoodEnvironmentAtlas.xls"
-# Create a list of dataframes from every sheet in the .xls file
-full_list <- path %>%
-  excel_sheets() %>%
-  set_names() %>%
-  map(read_excel, path = path)
-
+# Add new diabetes data to list of data frames
 full_list[[length(full_list)]] <- df_diabetes18
 
 # Create a modified list of the dataframes to only include ones with `FIPS` columns
@@ -64,71 +61,76 @@ fips_list <- full_list[c(3, 5:10, 12:length(full_list))]
 df_full_fips <- 
   fips_list %>% 
   reduce(inner_join, by = c("FIPS"))
+
+# Remove columns from dataframe that are not valid predictors. In our case, we remove columns that are geographic in nature or contain data also describing diabetes.
+df_full <- 
+  df_full_fips %>% 
+  select(-c("FIPS", matches("State"), matches("County"), "PCT_DIABETES_ADULTS08", "PCT_DIABETES_ADULTS13"))
 ```
 
-
-The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS13` which contains the percentage rates of diabetes diagnosed in adults in each county in 2013. We can see that the mean diabetes rate is about 11.24%, which is slightly higher than the CDC's 2020 estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal. Interestingly, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or South Carolina. Nine out of ten are counties in Alabama, while the other is in South Carolina.
+The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 177 statistics reported for 3139 FIPS codes. We also looked at some summary statistics for `diabetes18` which contains the percentage rates of diabetes diagnosed in adults in each county in 2018. We can see that the mean diabetes rate is about 8.72%, which is slightly higher than the CDC's 2020 estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly lognormal, with the peak shifted below the mean. When we isolate the counties with the ten highest diabetes rates, we find a range of states, but three out of the ten listed are actually in South Dakota. 
 
 ```{r EDA}
-df_full_fips %>% 
+df_full %>% 
   dim()
 
 df_full_fips %>%
-  select(PCT_DIABETES_ADULTS13) %>% 
+  select(diabetes18) %>% 
   summary()
 
 df_full_fips %>% 
-  select(c("County.x", "State.x", "PCT_DIABETES_ADULTS13")) %>% 
-  arrange(desc(PCT_DIABETES_ADULTS13)) %>% 
+  select(c("County.x", "State.x", "diabetes18")) %>% 
+  arrange(desc(diabetes18)) %>% 
   head(10)
 
 df_full_fips %>%
-  select(PCT_DIABETES_ADULTS13) %>% 
+  select(diabetes18) %>% 
   ggplot() +
-  geom_histogram(aes(x = PCT_DIABETES_ADULTS13), binwidth = .5, boundary = 10) +
+  geom_histogram(aes(x = diabetes18), binwidth = .5, boundary = 10) +
   xlab("Percent of Adults Diagnosed with Diabetes")
 ```
 
 ## Methodology
-In order to isolate the most important factors in a model to predict diabetes, we used a technique called lasso regression. Lasso regression is a form of **regularization**, which describes a family of techniques that help your model effectively balance **bias** and **variance**. In other words, a model should be optimized such that it is neither **underfit** (high bias) or **overfit** (high variance).
+In order to isolate the most important factors in a model to predict diabetes, we used a technique called lasso regression. Lasso regression is a form of **regularization**, which describes a family of techniques that help your model effectively balance **bias** and **variance**. In other words, a model should be optimized such that it is neither **underfit** (high bias) nor **overfit** (high variance). One way to overfit a model is to make coefficients which are too high, leading to a model which works very well for a training data but not as well on yet unseen data. On the other hand, eliminating too many features of a model may be oversimplified and have high bias.
 
+We will use the `glmnet` package in R to do lasso regression. This package depends on creating a **design matrix** rather than inputting a dataframe directly, so this is where we start. We use function `model.matrix` to compute the design matrix for the linear model predicting `diabetes18` using every other column at every observed county. This function removes rows with `NA` values from the dataframe, so the result is somewhat shorter than the input. The use of `glmnet` also depends on creating a list of the values we want to predict.
 
-Key to using lasso regression is splitting data into a training set and a testing set. The training set is used to inform the coefficients of a linear model, while the testing set is used to evaluate how well those coefficients work on separate data. 
-
-
-```{r split data into test and train}
-df_full <- 
-  df_full_fips %>% 
-  select(-c("FIPS", matches("State"), matches("County"), "PCT_DIABETES_ADULTS08", "PCT_DIABETES_ADULTS13"))
-
-# create a matrix of all the predictors in df_full
-# This also makes everything numeric and turns qualitative data into dummy vars
-x_vars <- model.matrix(diabetes18~. , df_full)[,-1]
+```{r create design matrix}
+# Create a matrix of all the predictors in df_full
+# This also makes everything numeric and turns qualitative data into dummy vars.
+x_vars <- model.matrix(diabetes18~. , df_full)
 
 # Pull diabetes rates into a list
 y_var <- df_full$diabetes18
+```
 
+Key to using lasso regression is splitting data into a training set and a testing set. The training set is used to inform the coefficients of a linear model, while the testing set is used to evaluate how well those coefficients work on data which is not used to develop the model itself.
+
+```{r split data into test and train}
 # Set sampling random seed
 set.seed(4)
 
+# Train is a list of indexes from where training data is taken
 train = sample(1:nrow(x_vars), nrow(x_vars)/2)
 
 training_data_x <- x_vars[train,]
 training_data_y <- y_var[train]
+
+# x_test is indexes where training data is NOT taken
+x_test = (-train)
+
+# y_test is values at testing indexes
+y_test = y_var[x_test]
 ```
 
+Lasso regression introduces a parameter `lambda` which penalizes high correlation coefficients. A higher lambda has the effect of *reducing* the dependence of an predicted variable The effect of lambda is to prevent overfitting by reducing the direct
 
-One way to overfit a model is to give too much weight to factors in the training data which in reality don't have a large impact on the result. On the other hand, eliminating too many features of a model may be oversimplified and have high bias. Lasso regression introduces a parameter `lambda` which penalizes high correlation coefficients.
+
 
 ```{r}
 # setup a sequence of lambda values to go through.
 lambda_seq <- 10^seq(2, -2, by = -.1)
 
-# x_test is indexes
-x_test = (-train)
-
-# y_test is values
-y_test = y_var[x_test]
 ```
 
 ```{r}
