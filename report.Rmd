@@ -93,7 +93,7 @@ df_full_fips %>%
 ## Methodology
 In order to isolate the most important factors in a model to predict diabetes, we used a technique called lasso regression. Lasso regression is a form of **regularization**, which describes a family of techniques that help your model effectively balance **bias** and **variance**. In other words, a model should be optimized such that it is neither **underfit** (high bias) nor **overfit** (high variance). One way to overfit a model is to make coefficients which are too high, leading to a model which works very well for a training data but not as well on yet unseen data. On the other hand, eliminating too many features of a model may be oversimplified and have high bias.
 
-We will use the `glmnet` package in R to do lasso regression. This package depends on creating a **design matrix** rather than inputting a dataframe directly, so this is where we start. We use function `model.matrix` to compute the design matrix for the linear model predicting `diabetes18` using every other column at every observed county. This function removes rows with `NA` values from the dataframe, so the result is somewhat shorter than the input. The use of `glmnet` also depends on creating a list of the values we want to predict.
+We used the `glmnet` package in R to do lasso regression. This package depends on us creating a **design matrix** rather than inputting a dataframe directly. We use the function `model.matrix` to compute the design matrix for the linear model predicting `diabetes18` using every other column and every observed county. This function removes rows with `NA` values from the dataframe, so the result is somewhat shorter than the input. The use of `glmnet` also depends on creating a list of the values we want to predict.
 
 ```{r create design matrix}
 # Create a matrix of all the predictors in df_full
@@ -123,17 +123,18 @@ x_test = (-train)
 y_test = y_var[x_test]
 ```
 
-Lasso regression introduces a parameter `lambda` which penalizes high correlation coefficients. A higher lambda has the effect of *reducing* the dependence of an predicted variable The effect of lambda is to prevent overfitting by reducing the direct
+Lasso regression introduces a parameter `lambda` which penalizes high correlation coefficients. A higher lambda value penalizes high regression coefficients more, resulting in a model with lower overall regression coefficients and high bias. Increasingly higher lambda values reduces the weakest correlation coefficients to zero, and in theory an infinitely high lambda value should *reduce all regression coefficients to zero*. 
+
+A lower lambda value penalizes high regression coefficients less, resulting in higher overall coefficients and high variance. The following image shows a representation of what this might look like for a single variable, and a similar thing happens in higher dimensions. In lasso regression, a range of lambda values are tested in order to find the ideal tradeoff between bias and variance. 
+
+![bias-variance](bias_variance.png)
 
 
-
-```{r}
+```{r test a range of lambdas}
 # setup a sequence of lambda values to go through.
 lambda_seq <- 10^seq(2, -2, by = -.1)
 
-```
-
-```{r}
+# Call glmnet function
 cv_output = cv.glmnet(training_data_x,
                    training_data_y,
                    alpha = 1,
@@ -141,6 +142,7 @@ cv_output = cv.glmnet(training_data_x,
 plot(cv_output) # Draw plot of training MSE as a function of lambda
 cv_output
 ```
+The plot above shows the MSE of the model outcome for different `lambda` values. The top of the graph lists the number of predictors left for every value of lambda. At the lowest values of lambda, the greatest number of predictors is used, but this leads to an overfit model. Eventually, all predictors are dropped to zero and the model is ineffective. An ideal model uses a `lambda` which minimizes the MSE. 
 
 ```{r}
 # Create model with minimum lambda value
@@ -153,29 +155,6 @@ lasso_min %>%
   mutate(est_ab = abs(estimate)) %>%
   arrange(desc(est_ab))
 
-
-# lasso_min %>% 
-#   tidy() %>% 
-#   arrange(desc(estimate)) %>% 
-#   mutate(estimate = abs(estimate))
-
-# # Create model with 1se lambda value
-# lambda_1se <- cv_output$lambda.1se
-# lasso_1se <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = lambda_1se)
-# pred_1se <- predict(lasso_1se, s = lambda_1se,  newx = x_vars[x_test,])
-# 
-# lasso_1se %>%
-#   tidy() %>%
-#   arrange(desc(estimate))
-
-# Create dataframe with predictions from both models compared with actual values
-# final <- cbind(y_var[x_test], pred_min)
-
-# as.tibble(final) %>%
-#   rename(
-#     "predicted" = "1",
-#     "actual" = "V1"
-#     ) 
 ```
 
 
@@ -201,10 +180,10 @@ CI
 
 ```{r echo=FALSE}
 
-intervals <- 
-  as.tibble(CI$interval) %>% 
+intervals <-
+  as.tibble(CI$interval) %>%
   tidy() %>%
-  filter(min != 0, 
+  filter(min != 0,
          max != 0,
          min >= 0 | min <= 0 & max <= 0) %>%
   mutate(abs_est = abs(mean)) %>%
@@ -226,7 +205,7 @@ est_intervals
 ```
 
 ```{r}
-est_intervals %>% 
+est_intervals %>%
   select(
     term,
     estimate,
@@ -318,8 +297,8 @@ plot <- sample_n(final, 50) %>%
   ggplot(aes(Index, Actual)) +
   geom_point(aes(color = "black")) +
   geom_point(aes(Index, Predicted, color = "red")) +
-  geom_errorbar(aes(ymin = Actual, 
-                    ymax = Predicted, 
+  geom_errorbar(aes(ymin = Actual,
+                    ymax = Predicted,
                     colour = "red"
                     ), position=position_dodge(.9)) +
   theme_error() +
