@@ -184,7 +184,22 @@ lasso_min %>%
 *what they are, why that might be the case*
 
 ## How good is this model for predicting diabetes rates? 
-*MSE or Rsquared values*- Shawn
+To evaluate our model, we can find the mean squared error between our predicted values and actual values.
+
+```{r echo = FALSE}
+final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
+  rowid_to_column("Index") %>%
+  rename('Actual' = V1, "Predicted" = "1")
+```
+
+```{r}
+mse <- mean((final$Predicted - final$Actual)^2)
+mse
+```
+
+Our mean squared error is 2.713. This tells us our model has a fairly significant error, and we cannot expect to predict the the diabetes rate with high accuracy. However, this also tells us that the predictors we found can help to predict general trends in the diabetes rate. 
+
+
 *confidence interval (CI or PI?? (probably CI)) of lasso model* - Jonas
 
 We noticed that our lasso model outputs varying correlation coefficients when ran multiple times. To account for this variation, we decided to perform a bootstrap to find a confidence interval for each of our correlation coefficients. We used the library HDCI to perform the bootstrap. The results are shown below, with any perdictor with intervals that included 0 removed to focus on our top predictors. We noticed that for larger estimates, their confidence interval range tended to be larger.
@@ -192,10 +207,6 @@ We noticed that our lasso model outputs varying correlation coefficients when ra
 ```{r}
 library(HDCI)
 CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
-```
-
-```{r}
-CI
 ```
 
 
@@ -245,12 +256,12 @@ Shown below is the top predictors of diabetes rate in the US that we found, with
 theme_interval <- function() {
   theme_minimal() %+replace%
   theme(
-    axis.text.x = element_text(size = 9, angle = 90),
+    axis.text.x = element_text(size = 9, angle = 90, hjust = 0.95),
     axis.text.y = element_text(size = 12),
     axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
-    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 12, angle = 90),
+    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 16, angle = 90),
     legend.title = element_text(size = 16),
-    legend.text = element_text(size = 12),
+    legend.text = element_text(size = 16),
     strip.text.x = element_text(size = 12),
     strip.text.y = element_text(size = 12),
     panel.grid.major = element_line(color = "grey90"),
@@ -265,17 +276,51 @@ theme_interval <- function() {
 }
 ```
 
+
+| Variables           | Meaning                                           | Estimate |
+|---------------------|---------------------------------------------------|----------|
+| SUPERCPTH16         | Supercenters & club stores, 2016                  | 3.382    |
+| SNAP_REPORTSIMPLE09 | SNAP simplified reporting, 2009*                  | -2.482   |
+| PCHWICWOMEN_14_16   | WIC women participants (change % women), 2014-16* | 2.093    |
+| SUPERCPTH11         | Supercenters & club stores, 2011                  | 1.771    |
+| SNAP_OAPP16         | SNAP online application, 2016*                    | -1.465   |
+| RECFACPTH16         | Recreation & fitness facilities/1,000 pop, 2016   | -1.0271  |
+| WICSPTH16           | WIC-authorized stores/1,000 pop, 2016             | -1.004   |
+| RECFAPTH11          | Recreation & fitness facilities/1,000 pop, 2011   | -0.526   |
+| FFRPTH11            | Full-service restaurants/1,000 pop, 2011          | -0.361   |
+| FFRPTH16            | Fast-food restaurants/1,000 pop, 2016             | -0.297   |
+| CHIPSTAX_VENDM14    | Chip & pretzel sales tax, vending, 2014*          | -0.147   |
+
+
+
+
 ```{r}
 est_intervals %>%
+  head(-7) %>%
   mutate(term = fct_reorder(term, est_ab)) %>%
   ggplot(aes(term, est_ab)) +
   geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
   geom_point() +
   theme_interval() +
-  labs(title="Top Predictors of US Diabetes Rate",
+  labs(title="\n Top Predictors of US Diabetes Rate \n",
        x = "Predictor",
-       y = "Size of Correlation Coefficient")
+       y = "Magnitude of \n Correlation Coefficient \n")
 ```
+
+| Variables           | Meaning                                           |
+|---------------------|---------------------------------------------------|
+| SUPERCPTH16         | Supercenters & club stores, 2016                  |
+| SNAP_REPORTSIMPLE09 | SNAP simplified reporting, 2009*                  |
+| PCHWICWOMEN_14_16   | WIC women participants (change % women), 2014-16* |
+| SUPERCPTH11         | Supercenters & club stores, 2011                  |
+| SNAP_OAPP16         | SNAP online application, 2016*                    |
+| RECFACPTH16         | Recreation & fitness facilities/1,000 pop, 2016   |
+| WICSPTH16           | WIC-authorized stores/1,000 pop, 2016             |
+| RECFAPTH11          | Recreation & fitness facilities/1,000 pop, 2011   |
+| FFRPTH11            | Full-service restaurants/1,000 pop, 2011          |
+| FFRPTH16            | Fast-food restaurants/1,000 pop, 2016             |
+| CHIPSTAX_VENDM14    | Chip & pretzel sales tax, vending, 2014*          |
+
 
 
 ```{r echo=FALSE}
@@ -285,7 +330,7 @@ theme_error <- function() {
     axis.text.x = element_text(size = 10, angle = 90),
     axis.text.y = element_text(size = 12),
     axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
-    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 12, angle = 90),
+    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 16, angle = 90),
     legend.title = element_text(size = 16),
     legend.text = element_text(size = 12),
     strip.text.x = element_text(size = 12),
@@ -302,29 +347,23 @@ theme_error <- function() {
 }
 ```
 
-T
-```{r echo = FALSE}
-final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
-  rowid_to_column("Index") %>%
-  rename('Actual' = V1, "Predicted" = "1") %>%
-  arrange(Actual) %>%
-  mutate(Index=factor(Index, levels=Index))
-```
 
 To get an idea of the accuracy of our model, below is a plot of 50 randomly sampled data points from our test data with our model's prediction.
 ```{r}
 
 plot <- sample_n(final, 50) %>%
-  ggplot(aes(Index, Actual)) +
+  arrange(Actual) %>%
+  rowid_to_column("ID") %>%
+  ggplot(aes(ID, Actual)) +
   geom_point(aes(color = "black")) +
-  geom_point(aes(Index, Predicted, color = "red")) +
+  geom_point(aes(ID, Predicted, color = "red")) +
   geom_errorbar(aes(ymin = Actual, 
                     ymax = Predicted, 
                     colour = "red"
                     ), position=position_dodge(.9)) +
   theme_error() +
-  labs(title="Prediction Error of 50 random samples",
-       x = "Index",
+  labs(title="Prediction Error of 50 Random Counties",
+       x = "Randomly Selected County",
        y = "Diabetes Rate ") +
   scale_color_manual(values = c("black", "red"),
                      labels = c("Actual", "Predicted"))
