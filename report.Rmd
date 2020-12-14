@@ -35,6 +35,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library("readxl")
 library(glmnet)
+library(broom)
 ```
 
 ```{r load data}
@@ -46,13 +47,14 @@ full_list <- path %>%
   map(read_excel, path = path)
 
 # Create a modified list of the dataframes to only include ones with `FIPS` columns
-fips_list <- full_list[c(3, 5:length(full_list))]
+fips_list <- full_list[c(3, 5:10, 12, 13)]
 
 # Create a single dataframe with all parameters for all counties
 df_full_fips <- 
   fips_list %>% 
-  reduce(inner_join, by = "FIPS")
+  reduce(inner_join, by = c("FIPS"))
 ```
+
 
 The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS13` which contains the percentage rates of diabetes diagnosed in adults in each county in 2013. We can see that the mean diabetes rate is about 11.24%, which is slightly higher than the CDC's 2020 estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal. Interestingly, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or South Carolina. Nine out of ten are counties in Alabama, while the other is in South Carolina. 
 
@@ -82,15 +84,15 @@ In order to isolate the most important factors in a model to predict diabetes, w
 
 Key to using lasso regression is splitting data into a training set and a testing set. The training set is used to inform the coefficients of a linear model, while the testing set is used to evaluate how well those coefficients work on separate data. 
 
-```{r split data into test and train}
 
+```{r split data into test and train}
 df_full <- 
   df_full_fips %>% 
-  select(-c('FIPS', "State.x", "County.x", "PCT_DIABETES_ADULTS08"))
+  select(-c("FIPS", matches("State"), matches("County"), "PCT_DIABETES_ADULTS08"))
 
 # create a matrix of all the predictors in df_full
 # This also makes everything numeric and turns qualitative data into dummy vars
-x_vars <- model.matrix(PCT_DIABETES_ADULTS13~. , df_full)
+x_vars <- model.matrix(PCT_DIABETES_ADULTS13~. , df_full)[,-1]
 
 # Pull diabetes rates into a list
 y_var <- df_full$PCT_DIABETES_ADULTS13
@@ -116,8 +118,55 @@ x_test = (-train)
 
 # y_test is values
 y_test = y_var[x_test]
-
 ```
+
+```{r}
+cv_output = cv.glmnet(training_data_x,
+                   training_data_y,
+                   alpha = 1,
+                   lambda = lambda_seq) # Fit lasso model on training data
+plot(cv_output) # Draw plot of training MSE as a function of lambda
+cv_output
+```
+
+```{r}
+# Create model with minimum lambda value
+lambda_min <- cv_output$lambda.min
+lasso_min <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = lambda_min)
+pred_min <- predict(lasso_min, s = lambda_min,  newx = x_vars[x_test,])
+
+lasso_min %>% 
+  tidy() %>%
+  mutate(est_ab = abs(estimate)) %>%
+  arrange(desc(est_ab))
+
+
+# lasso_min %>% 
+#   tidy() %>% 
+#   arrange(desc(estimate)) %>% 
+#   mutate(estimate = abs(estimate))
+
+# # Create model with 1se lambda value
+# lambda_1se <- cv_output$lambda.1se
+# lasso_1se <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = lambda_1se)
+# pred_1se <- predict(lasso_1se, s = lambda_1se,  newx = x_vars[x_test,])
+# 
+# lasso_1se %>%
+#   tidy() %>%
+#   arrange(desc(estimate))
+
+# Create dataframe with predictions from both models compared with actual values
+# final <- cbind(y_var[x_test], pred_min)
+
+# as.tibble(final) %>%
+#   rename(
+#     "predicted" = "1",
+#     "actual" = "V1"
+#     ) 
+```
+
+
+
 
 
 
