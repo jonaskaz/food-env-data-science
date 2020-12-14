@@ -29,6 +29,24 @@ library(broom)
 library(forcats)
 ```
 
+```{r}
+diabetes_path <- "data/diabetes2018.csv"
+df_diabetes18 <- 
+  read_csv(
+    diabetes_path,
+    skip = 2
+  ) %>% 
+  rename(
+    "FIPS" = County_FIPS, 
+    "diabetes18" = "Diagnosed Diabetes Percentage"
+    ) %>% 
+  select(c(FIPS, diabetes18)) %>% 
+  mutate(FIPS = ifelse(nchar(FIPS) == 4, paste("0", FIPS, sep = ""), FIPS))
+df_diabetes18
+```
+
+
+
 ```{r load data}
 path <- "data/FoodEnvironmentAtlas.xls"
 # Create a list of dataframes from every sheet in the .xls file
@@ -37,8 +55,10 @@ full_list <- path %>%
   set_names() %>%
   map(read_excel, path = path)
 
+full_list[[length(full_list)]] <- df_diabetes18
+
 # Create a modified list of the dataframes to only include ones with `FIPS` columns
-fips_list <- full_list[c(3, 5:10, 12, 13)]
+fips_list <- full_list[c(3, 5:10, 12:length(full_list))]
 
 # Create a single dataframe with all parameters for all counties
 df_full_fips <- 
@@ -47,7 +67,7 @@ df_full_fips <-
 ```
 
 
-The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS13` which contains the percentage rates of diabetes diagnosed in adults in each county in 2013. We can see that the mean diabetes rate is about 11.24%, which is slightly higher than the CDC's 2020 estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal. Interestingly, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or South Carolina. Nine out of ten are counties in Alabama, while the other is in South Carolina. 
+The most obvious thing to notice from is the fact that this dataset includes a lot of different statistics. Specifically, there are 311 statistics reported for 3140 FIPS codes. We also looked at some summary statistics for `PCT_DIABETES_ADULTS13` which contains the percentage rates of diabetes diagnosed in adults in each county in 2013. We can see that the mean diabetes rate is about 11.24%, which is slightly higher than the CDC's 2020 estimate of national diabetes rate at 10.2% [6]. A histogram allows us to visualize the distribution that diabetes rate takes across all counties. The distribution looks roughly normal. Interestingly, when we isolate the counties with the ten highest diabetes rates, we find that they are all in Alabama or South Carolina. Nine out of ten are counties in Alabama, while the other is in South Carolina.
 
 ```{r EDA}
 df_full_fips %>% 
@@ -79,14 +99,14 @@ Key to using lasso regression is splitting data into a training set and a testin
 ```{r split data into test and train}
 df_full <- 
   df_full_fips %>% 
-  select(-c("FIPS", matches("State"), matches("County"), "PCT_DIABETES_ADULTS08"))
+  select(-c("FIPS", matches("State"), matches("County"), "PCT_DIABETES_ADULTS08", "PCT_DIABETES_ADULTS13"))
 
 # create a matrix of all the predictors in df_full
 # This also makes everything numeric and turns qualitative data into dummy vars
-x_vars <- model.matrix(PCT_DIABETES_ADULTS13~. , df_full)[,-1]
+x_vars <- model.matrix(diabetes18~. , df_full)[,-1]
 
 # Pull diabetes rates into a list
-y_var <- df_full$PCT_DIABETES_ADULTS13
+y_var <- df_full$diabetes18
 
 # Set sampling random seed
 set.seed(4)
@@ -193,6 +213,7 @@ coef_conf <- lasso_best %>%
 est_intervals <- intervals %>%
   cbind(coef_conf)
 ```
+
 ```{r}
 est_intervals %>% 
   select(
