@@ -9,11 +9,11 @@ output:
 ## Introduction  
 
 *talk about uncertainty in the data itself here?*
-This dataset we used for our analysis is the Food Environment Atlas, taken from the USDA Economic Research Service. This datatset contains information on a number of food related environmental factors such as proximity to stores, food prices, food assistance programs, local food availability. It also includes data on factors that may be related to these such as obesity rate, diabetes rate, and physical activity. This data is provided on the country level across the United States. The purpose of the food environment atlas is to foster research in these areas, and give an overview of food access and health.
+The first dataset we used for our analysis is the Food Environment Atlas, taken from the USDA Economic Research Service. This datatset contains information on a number of food related environmental factors such as proximity to stores, food prices, food assistance programs, local food availability. It also includes data on factors that may be related to these such as obesity rate, diabetes rate, and physical activity. This data is provided on the country level across the United States. The purpose of the food environment atlas is to foster research in these areas, and give an overview of food access and health.The data for the Food Environment Atlas is largely taken from CDC estimates. The CDC uses data from the Behavioral Risk Factor Surveillance System which is under the US Census Bureau to make estimates. 
 
-The data for the Food Environment Atlas is largely taken from CDC estimates. The CDC uses data from the Behavioral Risk Factor Surveillance System which is under the US Census Bureau to make estimates. 
+We combined this dataset with 2018 county level diabetes data taken from the CDC. We chose to use this data as it was more recent than what was included in the Environmental Atlas, but ultimately came from the same source. This data is from a reputable government source, and we expect it to display accurate data. 
 
-Diabetes rate in this dataset is defined as the rate (percent) of persons over 20 years old with a BMI over 30 within each county. We compared this rate at the county level between other factors in this dataset such as proximity to grocery stores, food insecurity, socioeconomic factors and more to determine the best predictors.
+Diabetes rate in this dataset is defined as the rate (percent) of persons over 18 years old with a BMI over 30 within each county. We compared this rate at the county level between other factors in this dataset such as proximity to grocery stores, food insecurity, socioeconomic factors and more to determine the best predictors.
 
 ## Our question
 We set out to answer the question:  What are the best predictors of adult diabetes rate in the US?
@@ -192,7 +192,13 @@ library(HDCI)
 CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
 ```
 
+```{r}
+CI
+```
+
+
 ```{r echo=FALSE}
+
 intervals <- 
   as.tibble(CI$interval) %>% 
   tidy() %>%
@@ -203,15 +209,18 @@ intervals <-
   arrange(desc(abs_est)) %>%
   tail(-1)
 
-coef_conf <- lasso_best %>%
+coef_conf <- lasso_min %>%
   tidy() %>%
   mutate(est_ab = abs(estimate)) %>%
   arrange(desc(est_ab)) %>%
   tail(-1) %>%
-  head(-8)
-
+  head(-27)
+coef_conf
 est_intervals <- intervals %>%
-  cbind(coef_conf)
+  cbind(coef_conf) %>%
+  head(-1)
+est_intervals
+
 ```
 
 ```{r}
@@ -228,22 +237,8 @@ est_intervals %>%
 
 *CI for the lambda itself(?)* - Shawn
 
-## Plots - Jonas
-*maybe here, maybe scattered throughout*
-```{r}
-est_intervals %>%
-  mutate(term = fct_reorder(term, est_ab)) %>%
-  ggplot(aes(term, est_ab)) +
-  geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
-  geom_line() +
-  geom_point() +
-  theme_interval() +
-  labs(title="Top Predictors of US Diabetes Rate",
-       x = "Predictor",
-       y = "Size of Correlation Coefficient")
-```
-
-
+## Plots 
+Shown below is the top predictors of diabetes rate in the US that we found, with their associated confidence interval. 
 ```{r echo=FALSE}
 theme_interval <- function() {
   theme_minimal() %+replace%
@@ -268,33 +263,24 @@ theme_interval <- function() {
 }
 ```
 
-
-```{r echo = FALSE}
-final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
-  rowid_to_column("Index") %>%
-  rename('Actual' = V1, "Predicted" = "1") %>%
-  arrange(Actual) %>%
-  mutate(Index=factor(Index, levels=Index))
-
-plot <- head(final, 100) %>%
-  ggplot(aes(Index, Actual)) +
+```{r}
+est_intervals %>%
+  mutate(term = fct_reorder(term, est_ab)) %>%
+  ggplot(aes(term, est_ab)) +
+  geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
   geom_point() +
-  geom_point(aes(Index, Predicted), color = "red") +
-  geom_errorbar(aes(ymin = Actual, ymax=Predicted, color = "red")) +
-  theme_error() +
-  labs(title="Prediction Error of 100 samples",
-       x = "Index",
-       y = "Diabetes Rate ") +
-  scale_color_manual(labels = c("Error"), values = c("red")) 
-plot
-  
+  theme_interval() +
+  labs(title="Top Predictors of US Diabetes Rate",
+       x = "Predictor",
+       y = "Size of Correlation Coefficient")
 ```
+
 
 ```{r echo=FALSE}
 theme_error <- function() {
   theme_minimal() %+replace%
   theme(
-    axis.text.x = element_text(size = 5, angle = 90),
+    axis.text.x = element_text(size = 10, angle = 90),
     axis.text.y = element_text(size = 12),
     axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
     axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 12, angle = 90),
@@ -304,7 +290,7 @@ theme_error <- function() {
     strip.text.y = element_text(size = 12),
     panel.grid.major = element_line(color = "grey90"),
     panel.grid.minor = element_line(color = "grey90"),
-    aspect.ratio = 4 / 10,
+    aspect.ratio = 7 / 11,
     plot.margin = unit(c(t = +0, b = +0, r = +0, l = +0), "cm"),
     plot.title = element_text(size = 18),
     plot.title.position = "plot",
@@ -313,6 +299,38 @@ theme_error <- function() {
   )
 }
 ```
+
+T
+```{r echo = FALSE}
+final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
+  rowid_to_column("Index") %>%
+  rename('Actual' = V1, "Predicted" = "1") %>%
+  arrange(Actual) %>%
+  mutate(Index=factor(Index, levels=Index))
+```
+
+To get an idea of the accuracy of our model, below is a plot of 50 randomly sampled data points from our test data with our model's prediction.
+```{r}
+
+plot <- sample_n(final, 50) %>%
+  ggplot(aes(Index, Actual)) +
+  geom_point(aes(color = "black")) +
+  geom_point(aes(Index, Predicted, color = "red")) +
+  geom_errorbar(aes(ymin = Actual, 
+                    ymax = Predicted, 
+                    colour = "red"
+                    ), position=position_dodge(.9)) +
+  theme_error() +
+  labs(title="Prediction Error of 50 random samples",
+       x = "Index",
+       y = "Diabetes Rate ") +
+  scale_color_manual(values = c("black", "red"),
+                     labels = c("Actual", "Predicted"))
+plot
+  
+```
+
+
 
 
 ## Uncertainty
