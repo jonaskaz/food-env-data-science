@@ -11,6 +11,7 @@ library("readxl")
 library(glmnet)
 library(dplyr)
 library(tidyr)
+library(broom)
 ```
 
 ## R Markdown
@@ -84,7 +85,7 @@ df_full
 # create a matrix of all the predictors in df_health_socio
 # This also makes everything numeric and turns qualitative data into dummy vars
 x_vars <- model.matrix(PCT_DIABETES_ADULTS13~. , df_full)[,-1]
-y_var <- df_health_socio$PCT_DIABETES_ADULTS13
+y_var <- df_full$PCT_DIABETES_ADULTS13
 # setup a sequence of lambda values to go through.
 lambda_seq <- 10^seq(2, -2, by = -.1)
 ```
@@ -139,7 +140,7 @@ best_lam
 ```
 
 
-newx = x_vars[x_test,]
+
 
 ```{r}
 
@@ -149,6 +150,10 @@ pred <- predict(lasso_best, s = best_lam,  newx = x_vars[x_test,])
 
 ```
 
+```{r}
+final <- cbind(y_var[x_test], pred)
+length(pred)
+```
 
 
 ```{r}
@@ -158,6 +163,7 @@ df_final <- as.data.frame(final)
 df <- df_final %>%
   mutate(idx = as.numeric(rownames(.))) %>%
   rename(test = "1")
+
 df %>%
   ggplot() +
   geom_point(aes(x = idx, y = V1)) +
@@ -180,21 +186,77 @@ df %>%
 ```
 
 
+
+```{r}
+coef_conf <- lasso_best %>%
+  tidy() %>%
+  mutate(est_ab = abs(estimate)) %>%
+  arrange(desc(est_ab))
+coef_conf
+```
+
+
+```{r}
+
+library(HDCI)
+CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
+
+```
+
+
+```{r}
+intervals <- 
+  as.tibble(CI$interval) %>% 
+  tidy() %>%
+  filter(min != 0, 
+         max != 0,
+         min >= 0 | min <= 0 & max <= 0) %>%
+  mutate(abs_est = abs(mean)) %>%
+  arrange(desc(abs_est)) %>%
+  tail(-1)
+
+coef_conf <- lasso_best %>%
+  tidy() %>%
+  mutate(est_ab = abs(estimate)) %>%
+  arrange(desc(est_ab)) %>%
+  tail(-1) %>%
+  head(-8)
+
+est_intervals <- intervals %>%
+  cbind(coef_conf)
+```
+
+```{r}
+# Plot the top predictors of US diabetes rate
+est_intervals %>%
+  mutate(term = fct_reorder(term, est_ab)) %>%
+  ggplot(aes(term, est_ab)) +
+  geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
+  geom_line() +
+  geom_point() +
+  theme_common() +
+  xlab("Predictor") +
+  ylab("Size of Correlation Coefficient") +
+  labs(title="Top Predictors of US Diabetes Rate")
+```
+
+
+
 ```{r}
 theme_common <- function() {
   theme_minimal() %+replace%
   theme(
-    axis.text.x = element_text(size = 12),
+    axis.text.x = element_text(size = 9, angle = 90),
     axis.text.y = element_text(size = 12),
     axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
-    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 16, angle = 90),
+    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 12, angle = 90),
     legend.title = element_text(size = 16),
     legend.text = element_text(size = 12),
     strip.text.x = element_text(size = 12),
     strip.text.y = element_text(size = 12),
     panel.grid.major = element_line(color = "grey90"),
     panel.grid.minor = element_line(color = "grey90"),
-    aspect.ratio = 4 / 4,
+    aspect.ratio = 4 / 10,
     plot.margin = unit(c(t = +0, b = +0, r = +0, l = +0), "cm"),
     plot.title = element_text(size = 18),
     plot.title.position = "plot",

@@ -13,17 +13,7 @@ This dataset we used for our analysis is the Food Environment Atlas, taken from 
 
 The data for the Food Environment Atlas is largely taken from CDC estimates. The CDC uses data from the Behavioral Risk Factor Surveillance System which is under the US Census Bureau to make estimates. 
 
-
 Diabetes rate in this dataset is defined as the rate (percent) of persons over 20 years old with a BMI over 30 within each county. We compared this rate at the county level between other factors in this dataset such as proximity to grocery stores, food insecurity, socioeconomic factors and more to determine the best predictors.
-
-Background Research:
-Obesity:
-Defined as everyone above 20 years old with a BMI over 30. 
-Data comes from the CDC and the CDC made their estimates using data from the Behavioral Risk Factor Surveillance System which is under the US Census Bureau
-
-Diabetes:
-Estimates for people over 20 with diabetes
-Data comes from the CDC and the CDC made their estimates using data from the Behavioral Risk Factor Surveillance System which is under the US Census Bureau
 
 ## Our question
 We set out to answer the question:  What are the best predictors of adult diabetes rate in the US?
@@ -36,6 +26,7 @@ library(tidyverse)
 library("readxl")
 library(glmnet)
 library(broom)
+library(forcats)
 ```
 
 ```{r load data}
@@ -167,25 +158,149 @@ lasso_min %>%
 
 
 
-
-
-
-
 ## What are the best predictors? - Shawn
 *what they are, why that might be the case*
 
 ## How good is this model for predicting diabetes rates? 
 *MSE or Rsquared values*- Shawn
 *confidence interval (CI or PI?? (probably CI)) of lasso model* - Jonas
+
+We noticed that our lasso model outputs varying correlation coefficients when ran multiple times. To account for this variation, we decided to perform a bootstrap to find a confidence interval for each of our correlation coefficients. We used the library HDCI to perform the bootstrap. The results are shown below, with any perdictor with intervals that included 0 removed to focus on our top predictors. We noticed that for larger estimates, their confidence interval range tended to be larger.
+
+```{r}
+library(HDCI)
+CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
+```
+
+```{r echo=FALSE}
+intervals <- 
+  as.tibble(CI$interval) %>% 
+  tidy() %>%
+  filter(min != 0, 
+         max != 0,
+         min >= 0 | min <= 0 & max <= 0) %>%
+  mutate(abs_est = abs(mean)) %>%
+  arrange(desc(abs_est)) %>%
+  tail(-1)
+
+coef_conf <- lasso_best %>%
+  tidy() %>%
+  mutate(est_ab = abs(estimate)) %>%
+  arrange(desc(est_ab)) %>%
+  tail(-1) %>%
+  head(-8)
+
+est_intervals <- intervals %>%
+  cbind(coef_conf)
+```
+```{r}
+est_intervals %>% 
+  select(
+    term,
+    estimate,
+    est_ab,
+    min,
+    max
+  )
+```
+
+
 *CI for the lambda itself(?)* - Shawn
 
 ## Plots - Jonas
 *maybe here, maybe scattered throughout*
+```{r}
+est_intervals %>%
+  mutate(term = fct_reorder(term, est_ab)) %>%
+  ggplot(aes(term, est_ab)) +
+  geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
+  geom_line() +
+  geom_point() +
+  theme_interval() +
+  labs(title="Top Predictors of US Diabetes Rate",
+       x = "Predictor",
+       y = "Size of Correlation Coefficient")
+```
+
+
+```{r echo=FALSE}
+theme_interval <- function() {
+  theme_minimal() %+replace%
+  theme(
+    axis.text.x = element_text(size = 9, angle = 90),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
+    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 12, angle = 90),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 12),
+    strip.text.x = element_text(size = 12),
+    strip.text.y = element_text(size = 12),
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_line(color = "grey90"),
+    aspect.ratio = 4 / 10,
+    plot.margin = unit(c(t = +0, b = +0, r = +0, l = +0), "cm"),
+    plot.title = element_text(size = 18),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 16),
+    plot.caption = element_text(size = 12)
+  )
+}
+```
+
+
+```{r echo = FALSE}
+final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
+  rowid_to_column("Index") %>%
+  rename('Actual' = V1, "Predicted" = "1") %>%
+  arrange(Actual) %>%
+  mutate(Index=factor(Index, levels=Index))
+
+plot <- head(final, 100) %>%
+  ggplot(aes(Index, Actual)) +
+  geom_point() +
+  geom_point(aes(Index, Predicted), color = "red") +
+  geom_errorbar(aes(ymin = Actual, ymax=Predicted, color = "red")) +
+  theme_error() +
+  labs(title="Prediction Error of 100 samples",
+       x = "Index",
+       y = "Diabetes Rate ") +
+  scale_color_manual(labels = c("Error"), values = c("red")) 
+plot
+  
+```
+
+```{r echo=FALSE}
+theme_error <- function() {
+  theme_minimal() %+replace%
+  theme(
+    axis.text.x = element_text(size = 5, angle = 90),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
+    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 12, angle = 90),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 12),
+    strip.text.x = element_text(size = 12),
+    strip.text.y = element_text(size = 12),
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_line(color = "grey90"),
+    aspect.ratio = 4 / 10,
+    plot.margin = unit(c(t = +0, b = +0, r = +0, l = +0), "cm"),
+    plot.title = element_text(size = 18),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 16),
+    plot.caption = element_text(size = 12)
+  )
+}
+```
+
 
 ## Uncertainty
 *address sources of uncertainty which are potentially outside the scope of what's already been discussed*
+While we did account for uncertainty in our correlation coefficient calculation, there are still many sources uncertainty that we did not consider. The largest source is from the dataset itself. The values contained in the dataset are estimates themselves, and come with some level of uncertainty. For example, we found that the measure of food insecurity was estimated with a 90% confidence interval. This error reduces our certainty in our final results. 
+
 
 ## Conclusion - Shawn
+
 
 
 
