@@ -3,7 +3,9 @@ title: "Food Environmental Predictors of County Level Diabetes Rates"
 author: "Jonas Kazlauskas and Shawn Albertson"
 date: "12/15/2020"
 output:
+  # pdf_document:
   github_document:
+    
     toc: true
 ---
 ## Introduction  
@@ -241,9 +243,20 @@ plot
 
 We noticed that our lasso model outputs varying correlation coefficients when ran multiple times. To account for this variation, we decided to perform a bootstrap to find a confidence interval for each of our correlation coefficients. We used the library HDCI to perform the bootstrap. The results are shown below, with any predictor with intervals that included 0 removed to focus on our top predictors. We noticed that for larger estimates, their confidence interval range tended to be larger.
 
-```{r}
+```{r cache = TRUE}
 library(HDCI)
 CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
+```
+
+```{r}
+as.tibble(CI$interval) %>% 
+  tidy() %>% 
+  filter(min != 0,
+         max != 0,
+         min >= 0 | min <= 0 & max <= 0) %>%
+  mutate(abs_est = abs(mean)) %>%
+  arrange(desc(abs_est)) %>% 
+  tail(-1)
 ```
 
 
@@ -263,12 +276,12 @@ coef_conf <- lasso_min %>%
   mutate(est_ab = abs(estimate)) %>%
   arrange(desc(est_ab)) %>%
   tail(-1) %>%
-  head(-27)
+  head(-28)
 coef_conf
-est_intervals <- intervals %>%
-  cbind(coef_conf) %>%
-  head(-1)
 
+est_intervals <- intervals %>%
+  cbind(coef_conf) %>% 
+  head(-1)
 ```
 
 ```{r correlation confidence intervals}
