@@ -8,7 +8,6 @@ output:
 ---
 ## Introduction  
 
-*talk about uncertainty in the data itself here?*
 The first dataset we used for our analysis is the Food Environment Atlas, taken from the USDA Economic Research Service. This datatset contains information on a number of food related environmental factors such as proximity to stores, food prices, food assistance programs, local food availability. It also includes data on factors that may be related to these such as obesity rate, diabetes rate, and physical activity. This data is provided on the country level across the United States. The purpose of the food environment atlas is to foster research in these areas, and give an overview of food access and health.The data for the Food Environment Atlas is largely taken from CDC estimates. The CDC uses data from the Behavioral Risk Factor Surveillance System which is under the US Census Bureau to make estimates. 
 
 We combined this dataset with 2018 county level diabetes data taken from the CDC. We chose to use this data as it was more recent than what was included in the Environmental Atlas, but ultimately came from the same source. This data is from a reputable government source, and we expect it to display accurate data. 
@@ -142,9 +141,9 @@ cv_output = cv.glmnet(training_data_x,
 plot(cv_output) # Draw plot of training MSE as a function of lambda
 cv_output
 ```
-The plot above shows the MSE of the model outcome for different `lambda` values. The top of the graph lists the number of predictors left for every value of lambda. At the lowest values of lambda, the greatest number of predictors is used, but this leads to an overfit model. Eventually, all predictors are dropped to zero and the model is ineffective. An ideal model uses a `lambda` which minimizes the MSE. 
+The plot above shows the MSE of the model outcome for different `lambda` values. The top of the graph lists the number of predictors left for every value of `lambda`. At the lowest values of `lambda`, the greatest number of predictors is used, but this leads to an overfit model. Eventually, all predictors are dropped to zero and the model is ineffective. An ideal model uses a `lambda` which minimizes the MSE. 
 
-```{r}
+```{r lambda_min}
 # Create model with minimum lambda value
 lambda_min <- cv_output$lambda.min
 lasso_min <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = lambda_min)
@@ -154,107 +153,11 @@ lasso_min %>%
   tidy() %>%
   mutate(est_ab = abs(estimate)) %>%
   arrange(desc(est_ab))
-
 ```
 
+## Results
 
-
-## What are the best predictors? - Shawn
-*what they are, why that might be the case*
-
-## How good is this model for predicting diabetes rates? 
-To evaluate our model, we can find the mean squared error between our predicted values and actual values.
-
-```{r echo = FALSE}
-final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
-  rowid_to_column("Index") %>%
-  rename('Actual' = V1, "Predicted" = "1")
-```
-
-```{r}
-mse <- mean((final$Predicted - final$Actual)^2)
-mse
-```
-
-Our mean squared error is 2.713. This tells us our model has a fairly significant error, and we cannot expect to predict the the diabetes rate with high accuracy. However, this also tells us that the predictors we found can help to predict general trends in the diabetes rate. 
-
-
-*confidence interval (CI or PI?? (probably CI)) of lasso model* - Jonas
-
-We noticed that our lasso model outputs varying correlation coefficients when ran multiple times. To account for this variation, we decided to perform a bootstrap to find a confidence interval for each of our correlation coefficients. We used the library HDCI to perform the bootstrap. The results are shown below, with any perdictor with intervals that included 0 removed to focus on our top predictors. We noticed that for larger estimates, their confidence interval range tended to be larger.
-
-```{r}
-library(HDCI)
-CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
-```
-
-
-```{r echo=FALSE}
-
-intervals <-
-  as.tibble(CI$interval) %>%
-  tidy() %>%
-  filter(min != 0,
-         max != 0,
-         min >= 0 | min <= 0 & max <= 0) %>%
-  mutate(abs_est = abs(mean)) %>%
-  arrange(desc(abs_est)) %>%
-  tail(-1)
-
-coef_conf <- lasso_min %>%
-  tidy() %>%
-  mutate(est_ab = abs(estimate)) %>%
-  arrange(desc(est_ab)) %>%
-  tail(-1) %>%
-  head(-27)
-coef_conf
-est_intervals <- intervals %>%
-  cbind(coef_conf) %>%
-  head(-1)
-est_intervals
-
-```
-
-```{r}
-est_intervals %>%
-  select(
-    term,
-    estimate,
-    est_ab,
-    min,
-    max
-  )
-```
-
-
-*CI for the lambda itself(?)* - Shawn
-
-## Plots 
-Shown below is the top predictors of diabetes rate in the US that we found, with their associated confidence interval. 
-```{r echo=FALSE}
-theme_interval <- function() {
-  theme_minimal() %+replace%
-  theme(
-    axis.text.x = element_text(size = 9, angle = 90, hjust = 0.95),
-    axis.text.y = element_text(size = 12),
-    axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
-    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 16, angle = 90),
-    legend.title = element_text(size = 16),
-    legend.text = element_text(size = 16),
-    strip.text.x = element_text(size = 12),
-    strip.text.y = element_text(size = 12),
-    panel.grid.major = element_line(color = "grey90"),
-    panel.grid.minor = element_line(color = "grey90"),
-    aspect.ratio = 4 / 10,
-    plot.margin = unit(c(t = +0, b = +0, r = +0, l = +0), "cm"),
-    plot.title = element_text(size = 18),
-    plot.title.position = "plot",
-    plot.subtitle = element_text(size = 16),
-    plot.caption = element_text(size = 12)
-  )
-}
-```
-
+After fitting the model, we found that these predictors had the strongest correlation coefficients. 
 
 | Variables           | Meaning                                           | Estimate |
 |---------------------|---------------------------------------------------|----------|
@@ -271,36 +174,22 @@ theme_interval <- function() {
 | CHIPSTAX_VENDM14    | Chip & pretzel sales tax, vending, 2014*          | -0.147   |
 
 
+## Evaluating Model Effectiveness
 
+To evaluate our model, we found the mean squared error between our predicted values and actual values.
 
-```{r}
-est_intervals %>%
-  head(-7) %>%
-  mutate(term = fct_reorder(term, est_ab)) %>%
-  ggplot(aes(term, est_ab)) +
-  geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
-  geom_point() +
-  theme_interval() +
-  labs(title="\n Top Predictors of US Diabetes Rate \n",
-       x = "Predictor",
-       y = "Magnitude of \n Correlation Coefficient \n")
+```{r echo = FALSE}
+final <- as.tibble(cbind(y_var[x_test], pred_min)) %>%
+  rowid_to_column("Index") %>%
+  rename('Actual' = V1, "Predicted" = "1")
 ```
 
-| Variables           | Meaning                                           |
-|---------------------|---------------------------------------------------|
-| SUPERCPTH16         | Supercenters & club stores, 2016                  |
-| SNAP_REPORTSIMPLE09 | SNAP simplified reporting, 2009*                  |
-| PCHWICWOMEN_14_16   | WIC women participants (change % women), 2014-16* |
-| SUPERCPTH11         | Supercenters & club stores, 2011                  |
-| SNAP_OAPP16         | SNAP online application, 2016*                    |
-| RECFACPTH16         | Recreation & fitness facilities/1,000 pop, 2016   |
-| WICSPTH16           | WIC-authorized stores/1,000 pop, 2016             |
-| RECFAPTH11          | Recreation & fitness facilities/1,000 pop, 2011   |
-| FFRPTH11            | Full-service restaurants/1,000 pop, 2011          |
-| FFRPTH16            | Fast-food restaurants/1,000 pop, 2016             |
-| CHIPSTAX_VENDM14    | Chip & pretzel sales tax, vending, 2014*          |
+```{r}
+mse <- mean((final$Predicted - final$Actual)^2)
+mse
+```
 
-
+Our mean squared error is 2.713. This tells us our model has a fairly significant error, and we cannot expect to predict the the diabetes rate with high accuracy. However, this also tells us that the predictors we found can help to predict general trends in the diabetes rate. 
 
 ```{r echo=FALSE}
 theme_error <- function() {
@@ -326,10 +215,9 @@ theme_error <- function() {
 }
 ```
 
-
 To get an idea of the accuracy of our model, below is a plot of 50 randomly sampled data points from our test data with our model's prediction.
-```{r}
 
+```{r}
 plot <- sample_n(final, 50) %>%
   arrange(Actual) %>%
   rowid_to_column("ID") %>%
@@ -347,20 +235,100 @@ plot <- sample_n(final, 50) %>%
   scale_color_manual(values = c("black", "red"),
                      labels = c("Actual", "Predicted"))
 plot
-  
+```
+
+## Quantifying Uncertainty
+
+We noticed that our lasso model outputs varying correlation coefficients when ran multiple times. To account for this variation, we decided to perform a bootstrap to find a confidence interval for each of our correlation coefficients. We used the library HDCI to perform the bootstrap. The results are shown below, with any predictor with intervals that included 0 removed to focus on our top predictors. We noticed that for larger estimates, their confidence interval range tended to be larger.
+
+```{r}
+library(HDCI)
+CI = bootLasso(x_vars[train,], y_var[train], alpha = 0.05)
 ```
 
 
+```{r echo=FALSE}
+intervals <-
+  as.tibble(CI$interval) %>%
+  tidy() %>%
+  filter(min != 0,
+         max != 0,
+         min >= 0 | min <= 0 & max <= 0) %>%
+  mutate(abs_est = abs(mean)) %>%
+  arrange(desc(abs_est)) %>%
+  tail(-1)
+
+coef_conf <- lasso_min %>%
+  tidy() %>%
+  mutate(est_ab = abs(estimate)) %>%
+  arrange(desc(est_ab)) %>%
+  tail(-1) %>%
+  head(-27)
+coef_conf
+est_intervals <- intervals %>%
+  cbind(coef_conf) %>%
+  head(-1)
+
+```
+
+```{r correlation confidence intervals}
+est_intervals %>%
+  select(
+    term,
+    estimate,
+    est_ab,
+    min,
+    max
+  )
+```
+
+The figure below shows the top predictors of diabetes rate using the Food Environment Atlas for counties in the U.S. Confidence intervals for the correlation coefficients are included based on the results of the `bootLasso` function.
+
+```{r echo=FALSE}
+theme_interval <- function() {
+  theme_minimal() %+replace%
+  theme(
+    axis.text.x = element_text(size = 9, angle = 90, hjust = 0.95),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(margin = margin(4, 4, 4, 4), size = 16),
+    axis.title.y = element_text(margin = margin(4, 4, 4, 4), size = 16, angle = 90),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 16),
+    strip.text.x = element_text(size = 12),
+    strip.text.y = element_text(size = 12),
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_line(color = "grey90"),
+    aspect.ratio = 4 / 10,
+    plot.margin = unit(c(t = +0, b = +0, r = +0, l = +0), "cm"),
+    plot.title = element_text(size = 18),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 16),
+    plot.caption = element_text(size = 12)
+  )
+}
+```
 
 
-## Uncertainty
-*address sources of uncertainty which are potentially outside the scope of what's already been discussed*
+```{r}
+est_intervals %>%
+  head(-7) %>%
+  mutate(term = fct_reorder(term, est_ab)) %>%
+  ggplot(aes(term, est_ab)) +
+  geom_errorbar(aes(ymin=est_ab -(range/2), ymax=est_ab +(range/2)), width=.1, color = "red") +
+  geom_point() +
+  theme_interval() +
+  labs(title="\n Top Predictors of US Diabetes Rate \n",
+       x = "Predictor",
+       y = "Magnitude of \n Correlation Coefficient \n")
+```
+
+
+### Other Sources of Uncertainty
 While we did account for uncertainty in our correlation coefficient calculation, there are still many sources uncertainty that we did not consider. The largest source is from the dataset itself. The values contained in the dataset are estimates themselves, and come with some level of uncertainty. For example, we found that the measure of food insecurity was estimated with a 90% confidence interval. This error reduces our certainty in our final results. 
 
 
-## Conclusion - Shawn
-
-
+## Conclusion
+We created and evaluated a linear model to predict county level diabetes rates in the US based on the USDA Food Environment Atlas. Because of the large number of variables present in this dataset, we used a form of regularization known as lasso regresion to choose the best predictors for the dataset. While our model did not turn out to be remarkably good at predicting diabetes rates, we found some interesting results regarding the predictors themselves. Some clear connections can be drawn from factors such as as the number of supercenters and fast food restaurants to the diets of the masses. Other variables, such as the number of people who take part in food assistance programs may point to factors outside of the dataset itself. In summary, there are a large number of factors external to this dataset that are probably imporant for predicting diabetes rates. Having said this, lasso regression was an effective way to isolate the most influential factors in the data we had.
 
 
 ## Sources
@@ -373,4 +341,16 @@ While we did account for uncertainty in our correlation coefficient calculation,
 [7] https://cran.r-project.org/web/packages/glmnet/glmnet.pdf
 [8] https://www.pluralsight.com/guides/linear-lasso-and-ridge-regression-with-r
 
-
+<!-- | Variables           | Meaning                                           | -->
+<!-- |---------------------|---------------------------------------------------| -->
+<!-- | SUPERCPTH16         | Supercenters & club stores, 2016                  | -->
+<!-- | SNAP_REPORTSIMPLE09 | SNAP simplified reporting, 2009*                  | -->
+<!-- | PCHWICWOMEN_14_16   | WIC women participants (change % women), 2014-16* | -->
+<!-- | SUPERCPTH11         | Supercenters & club stores, 2011                  | -->
+<!-- | SNAP_OAPP16         | SNAP online application, 2016*                    | -->
+<!-- | RECFACPTH16         | Recreation & fitness facilities/1,000 pop, 2016   | -->
+<!-- | WICSPTH16           | WIC-authorized stores/1,000 pop, 2016             | -->
+<!-- | RECFAPTH11          | Recreation & fitness facilities/1,000 pop, 2011   | -->
+<!-- | FFRPTH11            | Full-service restaurants/1,000 pop, 2011          | -->
+<!-- | FFRPTH16            | Fast-food restaurants/1,000 pop, 2016             | -->
+<!-- | CHIPSTAX_VENDM14    | Chip & pretzel sales tax, vending, 2014*          | -->
